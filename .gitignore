@@ -1,0 +1,8 @@
+build/
+*.obj
+*.o
+*.pch
+*.log
+*.DS_Store
+.vscode/
+.idea/
