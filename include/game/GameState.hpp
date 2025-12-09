@@ -13,7 +13,7 @@ constexpr unsigned CELL = 44; // px
 
 using Cell = std::uint8_t;
 
-    struct GameState {
+struct GameState {
     std::array<Cell, COLS * ROWS> grid{};
 
     // falling/lock
@@ -31,8 +31,11 @@ using Cell = std::uint8_t;
 
 	//hold function
 	Tetromino holdType{};
-    	bool      hasHold   = false;
-    	bool      canHold   = true;
+    bool      hasHold   = false;
+    bool      canHold   = true;
+
+	// game over flag
+    bool      gameOver  = false;
 };
 
 } // namespace Tetris

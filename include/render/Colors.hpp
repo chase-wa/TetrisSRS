@@ -6,7 +6,7 @@ namespace Tetris {
     namespace Colors {
 
         // Background colour for the window.
-        inline const sf::Color Bg{16, 16, 20};
+        inline const sf::Color Bg{64, 64, 64};
 
         // Grid line colour.
         inline const sf::Color Grid{42, 45, 52};

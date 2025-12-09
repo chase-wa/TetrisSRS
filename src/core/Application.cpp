@@ -187,6 +187,15 @@ static bool tryMove(GameState& s, int dx, int dy) {
     return false;
 }
 
+// spawn next piece; if it collides immediately, flag game over
+static void spawnOrGameOver(GameState& s) {
+    spawn(s);  // from Logic.hpp
+
+    if (blocked(s, s.active)) {
+        s.gameOver = true;
+    }
+}
+
 Application::Application()
     : m_state{}
     , m_playfield(m_window)
@@ -307,6 +316,13 @@ void Application::processEvents() {
 			    continue;
 			}
 
+			if (m_mode == AppMode::Playing && m_state.gameOver) {
+ 				// maybe allow Esc to quit, Enter to restart later
+    			if (kp->scancode == K::Escape)
+    			    m_window.close();
+    			return;
+			}
+
             // -------- GAMEPLAY INPUT --------
             switch (kp->scancode) {
                 case K::Left: {
@@ -345,11 +361,16 @@ void Application::processEvents() {
                     tryMove(m_state, 0, -1); // soft drop
                 } break;
 
-                case K::Space: { // hard drop
+                case K::Space: {
                     m_state.active = dropToGround(m_state);
                     lockPiece(m_state);
                     clearLines(m_state);
-                    spawn(m_state);
+
+                    spawnOrGameOver(m_state);
+                    if (m_state.gameOver) {
+                        return; // stop processing this event if topped out
+                    }
+
                     m_state.canHold = true;
                 } break;
 
@@ -755,16 +776,18 @@ void Application::startGame() {
 void Application::update(float dt) {
     m_hud.update(dt);
 
-    if (m_mode == AppMode::Title || m_mode == AppMode::Config) {
-        return; // no gravity / lock while not playing
-    }
+    // only run physics in Playing mode
+    if (m_mode != AppMode::Playing)
+        return;
 
-	// auto-shift for held left/right
-    updateAutoShift(dt);
+    // once gameOver is set, freeze logic (you can later add restart)
+    if (m_state.gameOver)
+        return;
 
     m_state.fallAcc += m_state.gravity * dt;
     bool movedDown = false;
 
+    // gravity step(s)
     while (m_state.fallAcc >= 1.f) {
         m_state.fallAcc -= 1.f;
         if (tryMove(m_state, 0, -1)) {
@@ -778,15 +801,22 @@ void Application::update(float dt) {
     if (m_state.grounded) {
         m_state.lockTimer += dt;
         if (canMove(m_state, m_state.active, 0, -1)) {
+            // we can move down again → unground
             m_state.grounded    = false;
             m_state.lockTimer   = 0.f;
             m_state.lockResets  = 0;
         } else if (m_state.lockTimer >= m_state.lockDelay) {
+            // lock + clear + spawn; top-out if spawn overlaps
             lockPiece(m_state);
             clearLines(m_state);
-            spawn(m_state);
+
+            spawnOrGameOver(m_state);
+            if (m_state.gameOver) {
+                return;
+            }
         }
     } else if (movedDown) {
+        // check if we came to rest
         m_state.grounded = canMove(m_state, m_state.active, 0, -1)
                          ? false
                          : m_state.grounded;
@@ -796,6 +826,7 @@ void Application::update(float dt) {
         }
     }
 }
+
 
 void Application::renderTitle() {
     if (m_titleBgSprite)   m_window.draw(*m_titleBgSprite);
