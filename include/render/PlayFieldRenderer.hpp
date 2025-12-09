@@ -14,6 +14,8 @@ namespace Tetris {
     private:
         void drawGrid();
         void drawCells(const GameState& gs);
+		void drawGhost(const GameState& gs);
+        void drawActive(const GameState& gs);
 
         sf::RenderWindow& m_window;
         sf::Vector2f m_origin{64.f, 64.f}; // left/top of playfield in pixels

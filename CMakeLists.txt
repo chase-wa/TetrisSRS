@@ -42,7 +42,8 @@ add_custom_command(TARGET TetrisSRS POST_BUILD
 # Tests (optional)
 enable_testing()
 add_executable(smoketest tests/smoketest.cpp
-        include/core/Application.hpp)
+        include/core/Application.hpp
+        include/game/Pieces.hpp)
 target_link_libraries(smoketest PRIVATE SFML::Graphics SFML::Window SFML::System)
 add_test(NAME smoketest COMMAND smoketest)
 
