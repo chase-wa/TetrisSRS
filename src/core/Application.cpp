@@ -235,6 +235,38 @@ void Application::run() {
     }
 }
 
+void Application::setupRunForMenuSelection() {
+    switch (m_selectedMenu) {
+        case MenuItem::Sprint:
+            m_state.runType = RunType::Sprint;
+            break;
+        case MenuItem::Endless:
+            m_state.runType = RunType::Endless;
+            break;
+        case MenuItem::Blitz:
+            m_state.runType = RunType::Blitz;
+            break;
+        default:
+            m_state.runType = RunType::Endless;
+            break;
+    }
+
+    m_state.totalLinesCleared = 0;
+    m_state.gameOver          = false;
+
+    if (m_state.runType == RunType::Sprint) {
+        m_state.sprintTargetLines   = 40;
+        m_state.sprintCompleted     = false;
+        m_state.sprintTime          = 0.f;
+        m_state.sprintTimerRunning  = false;
+    } else {
+        m_state.sprintCompleted     = false;
+        m_state.sprintTime          = 0.f;
+        m_state.sprintTimerRunning  = false;
+    }
+}
+
+
 void Application::processEvents() {
     while (const auto ev = m_window.pollEvent()) {
         if (ev->is<sf::Event::Closed>()) {
@@ -276,6 +308,7 @@ void Application::processEvents() {
     					    // go to config screen instead of starting the game
     					    m_mode = AppMode::Config;
     					} else {
+							setupRunForMenuSelection();
     					    startGame();
     					}
     					return;
@@ -374,6 +407,7 @@ void Application::processEvents() {
                     m_state.canHold = true;
                 } break;
 
+				// rotations with SRS-X 180s
                 case K::Up:
                 case K::X: {
                     if (tryRotateWithKicks(m_state, +1, Kick180Mode::SRSX_180)
@@ -404,38 +438,20 @@ void Application::processEvents() {
 
                 // HOLD key (missing case you mentioned)
                 case K::C: {
-    			if (!m_state.canHold)
-    			    break;
-
-    			if (!m_state.hasHold) {
-    			    // first time holding: move current piece into hold and spawn a new one
-    			    m_state.hasHold  = true;
-    			    m_state.holdType = m_state.active.type;
-    			    spawn(m_state);             // standard spawn from bag
-    			} else {
-    			    // swap current piece with hold
-        			Tetromino oldHold = m_state.holdType;
-        			m_state.holdType  = m_state.active.type;
-
-			        // reuse spawn() to reset position/orientation,
-			        // then override the type with the held one
-			        spawn(m_state);
-			        m_state.active.type = oldHold;
-			    }
-
-			    m_state.canHold = false;
-			} break;
+    				holdPiece(m_state);
+				} break;
 
 
                 case K::Escape:
-			            // back to title
-			            m_mode = AppMode::Title;
-			            return;
+			    	// back to title
+					saveConfig();
+			        m_mode = AppMode::Title;
+			        return;
 
                 default:
                     break;
             }
-        }
+		}
 
         // ---- KeyReleased: stop DAS when letting go ----
         if (const auto* kr = ev->getIf<sf::Event::KeyReleased>()) {
@@ -768,10 +784,26 @@ void Application::initConfigUi() {
 }
 
 void Application::startGame() {
-    m_mode  = AppMode::Playing;
-    m_state = GameState{};
+    const RunType run    = m_state.runType;
+    const int     target = m_state.sprintTargetLines;
+
+    m_state = GameState{};  // reset
+
+    m_state.runType          = run;
+    m_state.sprintTargetLines = target;
+
+    m_state.totalLinesCleared = 0;
+    m_state.gameOver          = false;
+    m_state.sprintCompleted   = false;
+    m_state.sprintTime        = 0.f;
+
+    m_state.sprintTimerRunning =
+        (m_state.runType == RunType::Sprint);
+
+    m_mode = AppMode::Playing;
     spawn(m_state);
 }
+
 
 void Application::update(float dt) {
     m_hud.update(dt);
@@ -783,6 +815,11 @@ void Application::update(float dt) {
     // once gameOver is set, freeze logic (you can later add restart)
     if (m_state.gameOver)
         return;
+
+    // Sprint timer
+    if (m_state.runType == RunType::Sprint && m_state.sprintTimerRunning) {
+        m_state.sprintTime += dt;
+    }
 
     m_state.fallAcc += m_state.gravity * dt;
     bool movedDown = false;

@@ -33,11 +33,11 @@ inline void lockPiece(GameState& s) {
     }
 }
 
-inline int clearLines(GameState& s) {
-    int writeRow = 0;
-    int cleared  = 0;
+inline int clearLines(GameState& s)
+{
+    int linesCleared = 0;
 
-    // scan from bottom (y=0) to top (y=ROWS-1)
+    // go through each visible row
     for (int y = 0; y < ROWS; ++y) {
         bool full = true;
         for (int x = 0; x < COLS; ++x) {
@@ -47,29 +47,37 @@ inline int clearLines(GameState& s) {
             }
         }
 
-        if (!full) {
-            // keep this row; move it down if needed
-            if (writeRow != y) {
-                for (int x = 0; x < COLS; ++x) {
-                    s.grid[writeRow * COLS + x] = s.grid[y * COLS + x];
-                }
+        if (!full)
+            continue;
+
+        // shift everything above this row down by one
+        for (int yy = y; yy < ROWS - 1; ++yy) {
+            for (int x = 0; x < COLS; ++x) {
+                s.grid[yy * COLS + x] = s.grid[(yy + 1) * COLS + x];
             }
-            ++writeRow;
-        } else {
-            // drop this row
-            ++cleared;
         }
-    }
 
-    // clear remaining rows at the top
-    for (int y = writeRow; y < ROWS; ++y) {
+        // clear the very top row
         for (int x = 0; x < COLS; ++x) {
-            s.grid[y * COLS + x] = 0;
+            s.grid[(ROWS - 1) * COLS + x] = 0;
+        }
+
+        ++linesCleared;
+        --y;
+    }
+
+    if (linesCleared > 0) {
+        s.totalLinesCleared += linesCleared;
+
+        // Sprint-specific: auto-finish when we hit 40+
+        if (s.runType == RunType::Sprint && s.totalLinesCleared >= 40) {
+            s.gameOver = true;
         }
     }
 
-    return cleared;
+    return linesCleared;
 }
+
 
 // Compute a Y so the highest block of the spawn rotation sits at the top visible row.
 inline int spawnYVisible(Tetromino t, int rot = 0) {
@@ -85,52 +93,58 @@ inline ActivePiece makeSpawnPiece(Tetromino t) {
     ActivePiece p{};
     p.type = t;
     p.rot  = 0;
-    p.x    = 4;                          // your spawn X; change if you like
-    p.y    = spawnYVisible(t, 0);        // spawn so top of piece is visible
+    p.x    = 3;               // your spawn X
+    p.y    = VISIBLE_ROWS;    // your existing spawn Y (top of 20x10)
     return p;
 }
 
-// spawn from bag or forced type (used by hold)
-inline void spawn(GameState& s, std::optional<Tetromino> forced = std::nullopt) {
-    const Tetromino t = forced ? *forced : s.bag.next();
-
+// spawn a specific piece type without touching the bag
+inline void spawnActive(GameState& s, Tetromino t) {
     s.active = makeSpawnPiece(t);
 
-    // reset dynamic state
+    s.grounded   = false;
     s.lockTimer  = 0.f;
     s.lockResets = 0;
-    s.grounded   = false;
-    s.fallAcc    = 0.f;
-    s.canHold    = true;
-
-    // If the top is clogged, slide down until not blocked (simple fail-soft).
-    while (blocked(s, s.active)) {
-        s.active.y -= 1;                   // move downward (toward y=0)
-        if (s.active.y < 0) {
-            s.active.y = 0;
-            break;                         // you can trigger game over here instead
-        }
-    }
 }
 
-// hold / swap current piece
-inline void holdPiece(GameState& s) {
+// normal spawn from the bag / queue
+inline void spawn(GameState& s) {
+    Tetromino t = s.bag.next();
+    spawnActive(s, t);
+
+    // IMPORTANT: re-enable hold each time a NEW piece appears
+    s.canHold = true;
+}
+
+// internal helper used by holdPiece
+inline void doHold(GameState& s) {
     if (!s.canHold)
         return;
 
-    s.canHold = false;
-
     if (!s.hasHold) {
+        // first time: move current active to hold, spawn from bag
         s.holdType = s.active.type;
         s.hasHold  = true;
-        spawn(s);            // but this no longer flips canHold back
+
+        spawn(s);   // uses bag, sets canHold = true (we'll immediately clear)
     } else {
+        // later: swap active with held, DO NOT touch bag
         Tetromino current = s.active.type;
         Tetromino held    = s.holdType;
-        s.holdType        = current;
-        spawn(s, held);
+
+        s.holdType = current;    // put current into hold
+        spawnActive(s, held);    // bring held piece into play
     }
+
+    // no double-hold on the same active piece
+    s.canHold = false;
 }
+
+// public API used by Application
+inline void holdPiece(GameState& s) {
+    doHold(s);
+}
+
 
 inline bool canMove(const GameState& s, const ActivePiece& p, int dx, int dy) {
     auto q = p; q.x += dx; q.y += dy;

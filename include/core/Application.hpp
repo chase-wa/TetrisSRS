@@ -68,6 +68,9 @@ private:
 
     void updateAutoShift(float dt);
 
+	 // helper to configure GameState for a run type
+	void setupRunForMenuSelection();
+
     // --- config screen UI ---
     void initConfigUi();
     void renderConfig();
